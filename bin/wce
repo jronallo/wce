@@ -1,0 +1,38 @@
+#!/usr/bin/env ruby
+
+# wce
+
+require 'rubygems'
+# require 'slop'
+require 'mechanize'
+# require 'mida'
+require 'cgi'
+require 'httpclient'
+require 'rdf/microdata'
+
+def links_from_page(page, links)
+  return if links.length > 50
+  page.search(".table-results .result div.name a").each do |link|
+    links << link[:href]
+  end
+  next_page = page.links_with(:text => 'Next')[0].click
+  links_from_page(next_page, links)
+end
+
+links = []
+agent = Mechanize.new
+initial_query_page = agent.get("http://www.worldcat.org/search?q=#{CGI.escape(ARGV[0])}")
+links_from_page(initial_query_page, links)
+
+client = HTTPClient.new
+client.receive_timeout = 0
+links.each do |link|
+  url = File.join("http://www.worldcat.org", link) 
+  begin
+    page = client.get(url)
+    RDF::Microdata::Reader.new(page.body) do |reader|
+      puts reader.dump(:ntriples)
+    end
+  rescue
+  end
+end
